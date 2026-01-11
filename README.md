@@ -70,8 +70,8 @@ export const chromeClient = createTRPCClient<AppRouter>({
 
 Peer dependencies:
 
-- [`tRPC`](https://github.com/trpc/trpc) Server v10 (`@trpc/server`) must be installed.
-- [`tRPC`](https://github.com/trpc/trpc) Client v10 (`@trpc/client`) must be installed.
+- [`tRPC`](https://github.com/trpc/trpc) Server v11 (`@trpc/server`) must be installed.
+- [`tRPC`](https://github.com/trpc/trpc) Client v11 (`@trpc/client`) must be installed.
 
 ## Example
 
