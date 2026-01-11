@@ -1,9 +1,12 @@
-import { AnyProcedure, AnyRouter, ProcedureType, TRPCError } from '@trpc/server';
-// eslint-disable-next-line import/no-unresolved
-import type { NodeHTTPCreateContextOption } from '@trpc/server/dist/adapters/node-http/types';
-// eslint-disable-next-line import/no-unresolved
-import type { BaseHandlerOptions } from '@trpc/server/dist/internals/types';
-import { Unsubscribable, isObservable } from '@trpc/server/observable';
+import {
+  TRPCError,
+  type AnyProcedure,
+  type AnyRouter,
+  type inferRouterContext,
+  type ProcedureType,
+} from '@trpc/server';
+import { isObservable, type Unsubscribable } from '@trpc/server/observable';
+import { getErrorShape } from '@trpc/server/unstable-core-do-not-import';
 
 import type { TRPCChromeRequest, TRPCChromeResponse } from '../types';
 import { getErrorFromUnknown } from './errors';
@@ -13,21 +16,27 @@ export type CreateChromeContextOptions = {
   res: undefined;
 };
 
-export type CreateChromeHandlerOptions<TRouter extends AnyRouter> = Pick<
-  BaseHandlerOptions<TRouter, CreateChromeContextOptions['req']> &
-    NodeHTTPCreateContextOption<
-      TRouter,
-      CreateChromeContextOptions['req'],
-      CreateChromeContextOptions['res']
-    >,
-  'router' | 'createContext' | 'onError'
->;
+export type CreateChromeHandlerOptions<TRouter extends AnyRouter> = {
+  router: TRouter;
+  createContext?: (
+    opts: CreateChromeContextOptions,
+  ) => Promise<inferRouterContext<TRouter>> | inferRouterContext<TRouter>;
+  onError?: (opts: {
+    error: TRPCError;
+    type: ProcedureType | 'unknown';
+    path: string | undefined;
+    input: unknown;
+    ctx: inferRouterContext<TRouter> | undefined;
+    req: chrome.runtime.Port;
+  }) => void;
+};
 
 export const createChromeHandler = <TRouter extends AnyRouter>(
   opts: CreateChromeHandlerOptions<TRouter>,
 ) => {
   const { router, createContext, onError } = opts;
-  const { transformer } = router._def._config;
+  const config = router._def._config;
+  const { transformer } = config;
 
   chrome.runtime.onConnect.addListener((port) => {
     const subscriptions = new Map<number | string, Unsubscribable>();
@@ -56,7 +65,7 @@ export const createChromeHandler = <TRouter extends AnyRouter>(
 
       let params: { path: string; input: unknown } | undefined;
       let input: any;
-      let ctx: any;
+      let ctx: inferRouterContext<TRouter> | undefined;
 
       try {
         if (method === 'subscription.stop') {
@@ -101,7 +110,7 @@ export const createChromeHandler = <TRouter extends AnyRouter>(
 
         if (!isObservable(result)) {
           throw new TRPCError({
-            message: 'Subscription ${params.path} did not return an observable',
+            message: `Subscription ${params.path} did not return an observable`,
             code: 'INTERNAL_SERVER_ERROR',
           });
         }
@@ -111,7 +120,7 @@ export const createChromeHandler = <TRouter extends AnyRouter>(
             sendResponse({
               result: {
                 type: 'data',
-                data,
+                data: transformer.output.serialize(data),
               },
             });
           },
@@ -128,7 +137,8 @@ export const createChromeHandler = <TRouter extends AnyRouter>(
             });
 
             sendResponse({
-              error: router.getErrorShape({
+              error: getErrorShape({
+                config,
                 error,
                 type: method,
                 path: params?.path,
@@ -181,7 +191,8 @@ export const createChromeHandler = <TRouter extends AnyRouter>(
         });
 
         sendResponse({
-          error: router.getErrorShape({
+          error: getErrorShape({
+            config,
             error,
             type: method as ProcedureType,
             path: params?.path,

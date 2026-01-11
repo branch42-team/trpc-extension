@@ -1,18 +1,32 @@
-import { TRPCClientError, TRPCLink } from '@trpc/client';
+import { TRPCClientError, type TRPCLink } from '@trpc/client';
 import type { AnyRouter } from '@trpc/server';
 import { observable } from '@trpc/server/observable';
+import type { CombinedDataTransformer } from '@trpc/server/unstable-core-do-not-import';
 
 import type { TRPCChromeRequest, TRPCChromeResponse } from '../types';
 
 export type ChromeLinkOptions = {
   port: chrome.runtime.Port;
+  transformer?: CombinedDataTransformer;
+};
+
+const defaultTransformer: CombinedDataTransformer = {
+  input: {
+    serialize: (data) => data,
+    deserialize: (data) => data,
+  },
+  output: {
+    serialize: (data) => data,
+    deserialize: (data) => data,
+  },
 };
 
 export const chromeLink = <TRouter extends AnyRouter>(
   opts: ChromeLinkOptions,
 ): TRPCLink<TRouter> => {
-  return (runtime) => {
-    const { port } = opts;
+  const { port, transformer = defaultTransformer } = opts;
+
+  return () => {
     return ({ op }) => {
       return observable((observer) => {
         const listeners: (() => void)[] = [];
@@ -20,7 +34,7 @@ export const chromeLink = <TRouter extends AnyRouter>(
         const { id, type, path } = op;
 
         try {
-          const input = runtime.transformer.serialize(op.input);
+          const input = transformer.input.serialize(op.input);
 
           const onDisconnect = () => {
             observer.error(new TRPCClientError('Port disconnected prematurely'));
@@ -37,7 +51,7 @@ export const chromeLink = <TRouter extends AnyRouter>(
             if (id !== trpc.id) return;
 
             if ('error' in trpc) {
-              const error = runtime.transformer.deserialize(trpc.error);
+              const error = transformer.output.deserialize(trpc.error);
               observer.error(TRPCClientError.from({ ...trpc, error }));
               return;
             }
@@ -47,7 +61,7 @@ export const chromeLink = <TRouter extends AnyRouter>(
                 ...trpc.result,
                 ...((!trpc.result.type || trpc.result.type === 'data') && {
                   type: 'data',
-                  data: runtime.transformer.deserialize(trpc.result.data),
+                  data: transformer.output.deserialize(trpc.result.data),
                 }),
               } as any,
             });
