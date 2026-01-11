@@ -109,4 +109,4 @@ Distributed under the MIT License. See LICENSE for more information.
 
 Forked and upgrade by Parth V (Branch42 labs)
 
-James Berry - Follow me on Twitter [@jlalmes](https://twitter.com/jlalmes) 💙
+Thanks James Berry - Follow me on Twitter [@jlalmes](https://twitter.com/jlalmes)
