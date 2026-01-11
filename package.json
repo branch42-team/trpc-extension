@@ -13,9 +13,9 @@
     "webextension",
     "trpc@11.0.0"
   ],
-  "homepage": "https://github.com/branch42-team/trpc-chrome",
-  "repository": "github:branch42-team/trpc-chrome",
-  "bugs": "https://github.com/branch42-team/trpc-chrome",
+  "homepage": "https://github.com/branch42-team/trpc-extension",
+  "repository": "github:branch42-team/trpc-extension",
+  "bugs": "https://github.com/branch42-team/trpc-extension",
   "workspaces": [
     ".",
     "examples/with-plasmo"
