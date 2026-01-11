@@ -1,8 +1,8 @@
-# [**`trpc-chrome`**](../../README.md) (with-plasmo)
+# [**`trpc-extension`**](../../README.md) (with-plasmo)
 
 ### Getting started
 
-Make sure your current working directory is at `/trpc-chrome` root.
+Make sure your current working directory is at `/trpc-extension` root.
 
 ```bash
 npm install

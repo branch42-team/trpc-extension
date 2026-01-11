@@ -1,8 +1,8 @@
 ![trpc-chrome](assets/trpc-chrome-readme.png)
 
 <div align="center">
-  <h1>trpc-chrome</h1>
-  <a href="https://www.npmjs.com/package/trpc-chrome"><img src="https://img.shields.io/npm/v/trpc-chrome.svg?style=flat&color=brightgreen" target="_blank" /></a>
+  <h1>trpc-extension</h1>
+  <a href="https://www.npmjs.com/package/trpc-extension"><img src="https://img.shields.io/npm/v/trpc-extension.svg?style=flat&color=brightgreen" target="_blank" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-black" /></a>
   <a href="https://trpc.io/discord" target="_blank"><img src="https://img.shields.io/badge/chat-discord-blue.svg" /></a>
   <br />
@@ -17,15 +17,15 @@
 
 ## Usage
 
-**1. Install `trpc-chrome`.**
+**1. Install `trpc-extension`.**
 
 ```bash
 # npm
-npm install trpc-chrome
+npm install trpc-extension
 # pnpm
-pnpm install trpc-chrome
+pnpm add trpc-extension
 # yarn
-yarn add trpc-chrome
+yarn add trpc-extension
 ```
 
 **2. Add `createChromeHandler` in your background script.**
@@ -33,7 +33,7 @@ yarn add trpc-chrome
 ```typescript
 // background.ts
 import { initTRPC } from '@trpc/server';
-import { createChromeHandler } from 'trpc-chrome/adapter';
+import { createChromeHandler } from 'trpc-extension/adapter';
 
 const t = initTRPC.create({
   isServer: false,
@@ -56,7 +56,7 @@ createChromeHandler({
 ```typescript
 // content.ts
 import { createTRPCClient } from '@trpc/client';
-import { chromeLink } from 'trpc-chrome/link';
+import { chromeLink } from 'trpc-extension/link';
 
 import type { AppRouter } from './background';
 

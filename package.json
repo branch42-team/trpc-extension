@@ -1,6 +1,6 @@
 {
   "name": "trpc-extension",
-  "version": "1.2.0",
+  "version": "1.2.2",
   "description": "tRPC adapter for Web Extensions",
   "author": "Parth V <parth@branch42.com>",
   "private": false,
