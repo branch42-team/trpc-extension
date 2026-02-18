@@ -1,12 +1,12 @@
 import {
+  callTRPCProcedure,
   TRPCError,
-  type AnyProcedure,
   type AnyRouter,
   type inferRouterContext,
   type ProcedureType,
 } from '@trpc/server';
-import { isObservable, type Unsubscribable } from '@trpc/server/observable';
-import { getErrorShape } from '@trpc/server/unstable-core-do-not-import';
+import { isObservable, observableToAsyncIterable } from '@trpc/server/observable';
+import { getErrorShape, isAsyncIterable, iteratorResource, run } from '@trpc/server/unstable-core-do-not-import';
 
 import type { TRPCChromeRequest, TRPCChromeResponse } from '../types';
 import { getErrorFromUnknown } from './errors';
@@ -39,7 +39,7 @@ export const createChromeHandler = <TRouter extends AnyRouter>(
   const { transformer } = config;
 
   chrome.runtime.onConnect.addListener((port) => {
-    const subscriptions = new Map<number | string, Unsubscribable>();
+    const subscriptions = new Map<number | string, AbortController>();
     const listeners: (() => void)[] = [];
 
     const onDisconnect = () => {
@@ -71,7 +71,7 @@ export const createChromeHandler = <TRouter extends AnyRouter>(
         if (method === 'subscription.stop') {
           const subscription = subscriptions.get(id);
           if (subscription) {
-            subscription.unsubscribe();
+            subscription.abort();
             sendResponse({
               result: {
                 type: 'stopped',
@@ -87,15 +87,17 @@ export const createChromeHandler = <TRouter extends AnyRouter>(
         input = transformer.input.deserialize(params.input);
 
         ctx = await createContext?.({ req: port, res: undefined });
-        const caller = router.createCaller(ctx);
 
-        const segments = params.path.split('.');
-        const procedureFn = segments.reduce(
-          (acc, segment) => acc[segment],
-          caller as any,
-        ) as AnyProcedure;
-
-        const result = await procedureFn(input);
+        const abortController = new AbortController();
+        const result = await callTRPCProcedure({
+          router,
+          path: params.path,
+          getRawInput: async () => input,
+          ctx,
+          type: method,
+          signal: abortController.signal,
+          batchIndex: 0,
+        });
 
         if (method !== 'subscription') {
           const data = transformer.output.serialize(result);
@@ -108,56 +110,81 @@ export const createChromeHandler = <TRouter extends AnyRouter>(
           return;
         }
 
-        if (!isObservable(result)) {
+        if (!isObservable(result) && !isAsyncIterable(result)) {
           throw new TRPCError({
             message: `Subscription ${params.path} did not return an observable`,
             code: 'INTERNAL_SERVER_ERROR',
           });
         }
 
-        const subscription = result.subscribe({
-          next: (data) => {
-            sendResponse({
-              result: {
-                type: 'data',
-                data: transformer.output.serialize(data),
-              },
-            });
-          },
-          error: (cause) => {
-            const error = getErrorFromUnknown(cause);
+        const iterable = isObservable(result)
+          ? observableToAsyncIterable(result, abortController.signal)
+          : result;
+        run(async () => {
+          await using iterator = iteratorResource(iterable);
 
-            onError?.({
-              error,
-              type: method,
-              path: params?.path,
-              input,
-              ctx,
-              req: port,
+          const abortPromise = new Promise<'abort'>((resolve) => {
+            abortController.signal.addEventListener('abort', () => {
+              resolve('abort');
             });
+          });
+          while (true) {
+            const next = await Promise.race([
+              iterator.next().catch(getErrorFromUnknown),
+              abortPromise,
+            ]);
 
-            sendResponse({
-              error: getErrorShape({
-                config,
+            if (next === 'abort') {
+              iterator.return?.();
+              break;
+            }
+
+            if (next instanceof Error) {
+              const error = getErrorFromUnknown(next);
+
+              onError?.({
                 error,
                 type: method,
                 path: params?.path,
                 input,
                 ctx,
-              }),
-            });
-          },
-          complete: () => {
+                req: port,
+              });
+
+              sendResponse({
+                error: getErrorShape({
+                  config,
+                  error,
+                  type: method,
+                  path: params?.path,
+                  input,
+                  ctx,
+                }),
+              });
+
+              break;
+            }
+
+            if (next.done) {
+              sendResponse({
+                result: {
+                  type: 'stopped',
+                },
+              });
+              break;
+            }
+
             sendResponse({
               result: {
-                type: 'stopped',
+                type: 'data',
+                data: transformer.output.serialize(next.value),
               },
             });
-          },
+          }
         });
 
         if (subscriptions.has(id)) {
-          subscription.unsubscribe();
+          abortController.abort();
           sendResponse({
             result: {
               type: 'stopped',
@@ -168,9 +195,9 @@ export const createChromeHandler = <TRouter extends AnyRouter>(
             code: 'BAD_REQUEST',
           });
         }
-        listeners.push(() => subscription.unsubscribe());
+        listeners.push(() => abortController.abort());
 
-        subscriptions.set(id, subscription);
+        subscriptions.set(id, abortController);
 
         sendResponse({
           result: {
